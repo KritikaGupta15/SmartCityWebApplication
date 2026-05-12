@@ -159,5 +159,3 @@ Frontend renders only the requested data (intent-aware)
 Weather data powered by [Open-Meteo](https://open-meteo.com/) — free, no API key required for weather lookups.
 
 ---
-
-## Ros Group — AI Systems Project
