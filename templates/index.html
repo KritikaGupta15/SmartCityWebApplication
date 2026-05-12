@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AtmoSense — Real-Time Weather & Air Quality</title>
+  <meta name="description" content="Real-time weather and air quality monitoring powered by AI. Get instant temperature, AQI, wind, humidity data for any city worldwide."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #03060f;
+      --surface:   rgba(255,255,255,0.04);
+      --border:    rgba(255,255,255,0.09);
+      --text:      #e8edf5;
+      --muted:     #64748b;
+      --accent1:   #38bdf8;
+      --accent2:   #818cf8;
+      --accent3:   #c084fc;
+      --green:     #4ade80;
+      --yellow:    #fbbf24;
+      --orange:    #fb923c;
+      --red:       #f87171;
+      --glow1:     rgba(56,189,248,0.18);
+      --glow2:     rgba(192,132,252,0.14);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── ANIMATED BACKGROUND ───────────────────────────────────────────── */
+    .bg-canvas {
+      position: fixed; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(56,189,248,0.12), transparent 70%),
+        radial-gradient(ellipse 70% 50% at 80% 80%, rgba(192,132,252,0.10), transparent 70%),
+        radial-gradient(ellipse 60% 40% at 50% 40%, rgba(129,140,248,0.07), transparent 70%),
+        linear-gradient(180deg, #03060f 0%, #060c1a 50%, #03060f 100%);
+    }
+    .orb {
+      position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.35;
+      animation: orbFloat 12s ease-in-out infinite;
+      pointer-events: none; z-index: 0;
+    }
+    .orb1 { width: 500px; height: 500px; top: -150px; left: -100px;
+             background: radial-gradient(circle, #38bdf8, #6366f1 60%);
+             animation-delay: 0s; animation-duration: 15s; }
+    .orb2 { width: 400px; height: 400px; bottom: -100px; right: -100px;
+             background: radial-gradient(circle, #c084fc, #ec4899 60%);
+             animation-delay: -5s; animation-duration: 18s; }
+    .orb3 { width: 300px; height: 300px; top: 40%; left: 55%;
+             background: radial-gradient(circle, #34d399, #0ea5e9 60%);
+             animation-delay: -9s; animation-duration: 20s; }
+    @keyframes orbFloat {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33%       { transform: translate(30px, -40px) scale(1.05); }
+      66%       { transform: translate(-25px, 25px) scale(0.95); }
+    }
+
+    /* ─── LAYOUT ─────────────────────────────────────────────────────────── */
+    .page-wrap {
+      position: relative; z-index: 1;
+      display: flex; flex-direction: column; align-items: center;
+      min-height: 100vh;
+    }
+
+    /* ─── NAV ─────────────────────────────────────────────────────────────── */
+    nav {
+      width: 100%; max-width: 1100px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.4rem 1.5rem;
+      margin: 0 auto;
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 0.55rem;
+      font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(90deg, var(--accent1), var(--accent2), var(--accent3));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .nav-brand .icon { font-size: 1.4rem; }
+    .nav-pills { display: flex; gap: 0.5rem; }
+    .nav-pill {
+      padding: 0.3rem 0.85rem; border-radius: 999px; font-size: 0.78rem;
+      border: 1px solid var(--border); color: var(--muted);
+      background: var(--surface); backdrop-filter: blur(8px);
+      font-weight: 500; letter-spacing: 0.02em;
+    }
+
+    /* ─── HERO ─────────────────────────────────────────────────────────────── */
+    .hero {
+      width: 100%; max-width: 800px;
+      display: flex; flex-direction: column; align-items: center;
+      text-align: center;
+      padding: 4rem 1.5rem 2.5rem;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 0.45rem;
+      padding: 0.3rem 1rem 0.3rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid rgba(56,189,248,0.3);
+      background: rgba(56,189,248,0.08);
+      font-size: 0.75rem; font-weight: 600; color: var(--accent1);
+      margin-bottom: 1.5rem; letter-spacing: 0.04em;
+    }
+    .hero-badge .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent1);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.8); }
+    }
+    .hero h1 {
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      font-weight: 900; line-height: 1.08;
+      letter-spacing: -0.04em;
+      background: linear-gradient(135deg, #f1f5f9 0%, var(--accent1) 40%, var(--accent3) 80%, #f1f5f9 100%);
+      background-size: 200% 200%;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmer 6s linear infinite;
+      margin-bottom: 1rem;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .hero p {
+      font-size: 1.05rem; color: #94a3b8;
+      line-height: 1.7; max-width: 560px; margin-bottom: 2.5rem;
+    }
+
+    /* ─── SEARCH BOX ─────────────────────────────────────────────────────── */
+    .search-wrap {
+      width: 100%; max-width: 660px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      padding: 0.55rem 0.55rem 0.55rem 1.3rem;
+      display: flex; align-items: center; gap: 0.6rem;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 4px 40px rgba(56,189,248,0.1), 0 0 0 1px rgba(255,255,255,0.04);
+      transition: box-shadow 0.3s, border-color 0.3s;
+      margin-bottom: 1.1rem;
+    }
+    .search-wrap:focus-within {
+      border-color: rgba(129,140,248,0.45);
+      box-shadow: 0 4px 40px rgba(129,140,248,0.2), 0 0 0 4px rgba(129,140,248,0.08);
+    }
+    .search-icon { font-size: 1.1rem; flex-shrink: 0; opacity: 0.5; }
+    #queryInput {
+      flex: 1; background: none; border: none; outline: none;
+      color: var(--text); font-size: 0.97rem; font-family: inherit;
+      padding: 0.5rem 0;
+    }
+    #queryInput::placeholder { color: #475569; }
+    #submitBtn {
+      padding: 0.7rem 1.5rem; border-radius: 13px; border: none;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+      color: #fff; font-size: 0.92rem; font-weight: 700;
+      cursor: pointer; white-space: nowrap;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 2px 20px rgba(139,92,246,0.4);
+      letter-spacing: 0.01em;
+    }
+    #submitBtn:hover  { opacity: 0.92; transform: translateY(-1px); box-shadow: 0 4px 28px rgba(139,92,246,0.5); }
+    #submitBtn:active { transform: translateY(0); }
+    #submitBtn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    /* ─── SUGGESTION CHIPS ─────────────────────────────────────────────── */
+    .chip-row {
+      display: flex; flex-wrap: wrap; gap: 0.45rem;
+      justify-content: center; max-width: 660px;
+    }
+    .chip {
+      padding: 0.32rem 0.82rem; border-radius: 999px;
+      border: 1px solid rgba(56,189,248,0.22);
+      background: rgba(56,189,248,0.06);
+      color: var(--accent1); font-size: 0.75rem; font-weight: 500;
+      cursor: pointer; transition: background 0.18s, border-color 0.18s;
+    }
+    .chip:hover { background: rgba(56,189,248,0.14); border-color: rgba(56,189,248,0.45); }
+
+    /* ─── STATS ROW ──────────────────────────────────────────────────────── */
+    .stats-row {
+      display: flex; gap: 2rem; flex-wrap: wrap; justify-content: center;
+      padding: 2.5rem 1.5rem 0;
+      max-width: 900px; width: 100%;
+    }
+    .stat-item { text-align: center; }
+    .stat-value {
+      font-size: 1.6rem; font-weight: 800; letter-spacing: -0.03em;
+      background: linear-gradient(90deg, var(--accent1), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 0.15rem; }
+
+    /* ─── LOADER ─────────────────────────────────────────────────────────── */
+    #loader {
+      display: none; align-items: center; gap: 1rem;
+      padding: 1.1rem 1.4rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      backdrop-filter: blur(16px);
+      max-width: 660px; width: 100%; margin: 1.5rem auto 0;
+    }
+    #loader.visible { display: flex; }
+    .spinner-ring {
+      width: 26px; height: 26px; flex-shrink: 0;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: var(--accent2);
+      border-left-color: var(--accent1);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loaderText { font-size: 0.88rem; color: var(--muted); }
+
+    /* ─── RESULT AREA ────────────────────────────────────────────────────── */
+    #resultWrap {
+      display: none; width: 100%; max-width: 860px;
+      padding: 1.5rem 1rem 3rem;
+      animation: fadeUp 0.4s ease;
+    }
+    #resultWrap.visible { display: block; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ─── CARDS ──────────────────────────────────────────────────────────── */
+    .glass {
+      background: rgba(255,255,255,0.045);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 20px;
+      backdrop-filter: blur(20px);
+      padding: 1.5rem;
+    }
+    .glass-sm { border-radius: 14px; padding: 1rem 1.1rem; }
+    .section-label {
+      font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); margin-bottom: 1rem;
+    }
+
+    /* ─── LOCATION HEADER ────────────────────────────────────────────────── */
+    .loc-row {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.1rem;
+    }
+    .loc-name { font-size: 1.4rem; font-weight: 800; color: #f1f5f9; letter-spacing: -0.02em; }
+    .loc-coords { font-size: 0.72rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 0.25rem; }
+    .cond-badge {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.35rem 0.9rem;
+      border-radius: 999px;
+      background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.25);
+      color: var(--accent1); font-size: 0.8rem; font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* ─── WEATHER METRICS GRID ──────────────────────────────────────────── */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 0.75rem; margin: 1rem 0;
+    }
+    .metric-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px; padding: 1rem;
+      text-align: center;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .metric-card:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.14); }
+    .mc-icon { font-size: 1.4rem; margin-bottom: 0.35rem; }
+    .mc-label {
+      font-size: 0.63rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.07em;
+    }
+    .mc-value { font-size: 1.2rem; font-weight: 700; color: #f1f5f9; margin-top: 0.2rem; }
+    .mc-sub { font-size: 0.72rem; color: var(--muted); margin-top: 0.1rem; }
+
+    /* ─── TEMPERATURE HERO ─────────────────────────────────────────────── */
+    .temp-hero { text-align: center; padding: 1.2rem 0 0.5rem; }
+    .temp-city { font-size: 0.95rem; color: var(--muted); margin-bottom: 0.3rem; }
+    .temp-big {
+      font-size: 4rem; font-weight: 900; line-height: 1;
+      letter-spacing: -0.04em;
+      background: linear-gradient(90deg, var(--accent1), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .temp-label {
+      font-size: 0.78rem; color: var(--muted); margin-top: 0.35rem;
+      text-transform: uppercase; letter-spacing: 0.07em;
+    }
+
+    /* ─── AQI SECTION ─────────────────────────────────────────────────── */
+    .aqi-section { margin-top: 1rem; }
+    .aqi-header-row {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;
+    }
+    .aqi-score {
+      display: flex; align-items: center; gap: 0.75rem;
+    }
+    .aqi-circle {
+      width: 64px; height: 64px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; font-weight: 900; color: #fff;
+      flex-shrink: 0;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .aqi-info h3 { font-size: 1rem; font-weight: 700; color: #f1f5f9; }
+    .aqi-info p  { font-size: 0.78rem; color: var(--muted); margin-top: 0.1rem; }
+    .aqi-station { font-size: 0.7rem; color: var(--muted); font-style: italic; }
+    .pollutants-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 0.65rem; margin-top: 0.75rem;
+    }
+    .poll-card {
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px; padding: 0.75rem;
+      text-align: center;
+    }
+    .poll-name  { font-size: 0.6rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .poll-value { font-size: 1.1rem; font-weight: 700; color: #f1f5f9; margin: 0.25rem 0 0.1rem; }
+    .poll-unit  { font-size: 0.6rem; color: var(--muted); }
+    .aqi-bar-wrap { margin-top: 1rem; }
+    .aqi-bar-labels {
+      display: flex; justify-content: space-between;
+      font-size: 0.6rem; color: var(--muted); margin-bottom: 0.3rem;
+    }
+    .aqi-bar {
+      height: 6px; border-radius: 999px;
+      background: linear-gradient(90deg, #22c55e, #eab308, #f97316, #ef4444, #a855f7, #7f1d1d);
+      position: relative;
+    }
+    .aqi-needle {
+      position: absolute; top: -4px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #fff; border: 2px solid currentColor;
+      transform: translateX(-50%);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      transition: left 0.5s cubic-bezier(.34,1.56,.64,1);
+    }
+    .aqi-no-data {
+      text-align: center; padding: 1.2rem;
+      color: var(--muted); font-size: 0.85rem;
+    }
+
+    /* ─── AI SUMMARY ─────────────────────────────────────────────────────── */
+    .ai-summary {
+      margin-top: 1rem;
+      padding: 0.9rem 1.1rem;
+      background: rgba(99,102,241,0.08);
+      border-left: 3px solid var(--accent2);
+      border-radius: 0 12px 12px 0;
+      font-size: 0.87rem; line-height: 1.7; color: #cbd5e1;
+    }
+    .ai-label {
+      display: flex; align-items: center; gap: 0.35rem;
+      font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--accent2); font-weight: 700; margin-bottom: 0.4rem;
+    }
+
+    /* ─── DETAILS TOGGLE ─────────────────────────────────────────────────── */
+    .details-toggle {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      margin-top: 1rem;
+      padding: 0.38rem 0.9rem;
+      background: rgba(129,140,248,0.1); border: 1px solid rgba(129,140,248,0.28);
+      border-radius: 999px; color: var(--accent2);
+      font-size: 0.75rem; font-weight: 600; cursor: pointer;
+      transition: background 0.18s; letter-spacing: 0.03em;
+    }
+    .details-toggle:hover { background: rgba(129,140,248,0.2); }
+    .details-toggle .arrow { font-size: 0.62rem; transition: transform 0.25s; }
+    .focused-details {
+      max-height: 0; overflow: hidden;
+      transition: max-height 0.4s ease, opacity 0.3s ease;
+      opacity: 0;
+    }
+    .focused-details.open { max-height: 900px; opacity: 1; }
+    .focused-details-inner {
+      margin-top: 1rem; padding-top: 1rem;
+      border-top: 1px solid rgba(255,255,255,0.07);
+    }
+
+    /* ─── ALERTS ─────────────────────────────────────────────────────────── */
+    .alert {
+      padding: 1.1rem 1.25rem; border-radius: 14px;
+      font-size: 0.9rem; line-height: 1.65;
+    }
+    .alert-error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.28); color: #fca5a5; }
+    .alert-info  { background: rgba(251,191,36,0.09); border: 1px solid rgba(251,191,36,0.25); color: #fde68a; }
+
+    /* ─── DISAMBIGUATION ─────────────────────────────────────────────────── */
+    .disambig-hdr {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.93rem; font-weight: 600; color: #fde68a;
+      margin-bottom: 0.9rem;
+    }
+    .disambig-list { display: flex; flex-direction: column; gap: 0.55rem; }
+    .disambig-opt {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px; cursor: pointer; text-align: left;
+      color: var(--text); font-size: 0.875rem;
+      transition: background 0.18s, border-color 0.18s, transform 0.12s;
+    }
+    .disambig-opt:hover {
+      background: rgba(129,140,248,0.12); border-color: rgba(129,140,248,0.35);
+      transform: translateX(4px);
+    }
+    .disambig-opt .coords-sm {
+      font-size: 0.68rem; color: var(--muted); margin-left: auto; white-space: nowrap;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ─── DATA SOURCE ─────────────────────────────────────────────────────── */
+    .data-src {
+      margin-top: 0.9rem; font-size: 0.67rem; color: #334155;
+      text-align: right; letter-spacing: 0.03em;
+    }
+
+    /* ─── DIVIDER ─────────────────────────────────────────────────────────── */
+    .divider {
+      height: 1px; background: rgba(255,255,255,0.06);
+      margin: 1rem 0;
+    }
+
+    /* ─── FEATURE CARDS ─────────────────────────────────────────────────── */
+    .features {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem; max-width: 900px; width: 100%;
+      padding: 0 1rem 3rem;
+    }
+    .feat-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 18px; padding: 1.4rem;
+      transition: background 0.2s, transform 0.2s;
+    }
+    .feat-card:hover { background: rgba(255,255,255,0.06); transform: translateY(-3px); }
+    /* ─── FOOTER ──────────────────────────────────────────────────────────── */
+    footer {
+      width: 100%; border-top: 1px solid rgba(255,255,255,0.05);
+      padding: 1.2rem 1.5rem;
+      text-align: center; font-size: 0.7rem; color: #1e293b;
+    }
+
+    /* ─── UTILS ───────────────────────────────────────────────────────────── */
+    .mt1 { margin-top: 0.75rem; }
+    .mt2 { margin-top: 1.25rem; }
+  </style>
+</head>
+<body>
+
+<div class="bg-canvas"></div>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+
+<div class="page-wrap">
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-brand">
+      <span class="icon">🌐</span> AtmoSense
+    </div>
+    <div class="nav-pills">
+      <span class="nav-pill">Weather</span>
+      <span class="nav-pill">Air Quality</span>
+      <span class="nav-pill">AI Powered</span>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      LIVE MONITORING ACTIVE
+    </div>
+    <h1>Weather & Air Quality<br/>Intelligence</h1>
+    <p>Ask anything about temperature, wind, humidity, UV index, or air pollution for any city worldwide — powered by real-time APIs and AI.</p>
+
+    <!-- SEARCH -->
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input id="queryInput" type="text"
+        placeholder="e.g. What's the air quality in Delhi?"/>
+      <button id="submitBtn" onclick="submitQuery()">Search</button>
+    </div>
+
+    <!-- CHIPS -->
+    <div class="chip-row">
+      <span class="chip" onclick="fillQuery(this)">🌡 Temperature in Tokyo in °F</span>
+      <span class="chip" onclick="fillQuery(this)">🌬 Air quality in Delhi</span>
+      <span class="chip" onclick="fillQuery(this)">💧 Humidity in London</span>
+      <span class="chip" onclick="fillQuery(this)">☀️ UV index in Sydney</span>
+      <span class="chip" onclick="fillQuery(this)">🌧 Weather in Paris</span>
+      <span class="chip" onclick="fillQuery(this)">💨 Wind speed in Chicago</span>
+    </div>
+  </div>
+
+  <!-- LOADER -->
+  <div id="loader">
+    <div class="spinner-ring"></div>
+    <span id="loaderText">Reasoning & fetching real-time data…</span>
+  </div>
+
+  <!-- RESULT -->
+  <div id="resultWrap">
+    <div id="resultContent"></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-row" id="statsRow">
+    <div class="stat-item">
+      <div class="stat-value">180+</div>
+      <div class="stat-label">Countries</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">30K+</div>
+      <div class="stat-label">AQ Stations</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">Real‑Time</div>
+      <div class="stat-label">Data Updates</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">AI</div>
+      <div class="stat-label">Powered</div>
+    </div>
+  </div>
+
+  <!-- FEATURE CARDS -->
+  <div class="features" id="featureCards" style="margin-top:3rem;">
+    <div class="feat-card">
+      <div class="feat-icon" style="background:rgba(56,189,248,0.12);">🌡</div>
+      <h3>Live Weather</h3>
+      <p>Real-time temperature, feels-like, wind speed, humidity, UV index and visibility from Open-Meteo.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon" style="background:rgba(74,222,128,0.12);">🌿</div>
+      <h3>Air Quality Index</h3>
+      <p>PM2.5, PM10, NO₂, O₃, SO₂ and more from 30,000+ official monitoring stations via OpenAQ.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon" style="background:rgba(192,132,252,0.12);">🤖</div>
+      <h3>AI Summary</h3>
+      <p>DeepSeek AI turns raw data into natural language insights with practical health and weather tips.</p>
+    </div>
+    <div class="feat-card">
+      <div class="feat-icon" style="background:rgba(251,191,36,0.12);">📍</div>
+      <h3>Smart Geocoding</h3>
+      <p>Handles ambiguous city names — shows multiple matches and lets you pick the exact location.</p>
+    </div>
+  </div>
+
+  <footer>
+    Data: Open-Meteo API &nbsp;·&nbsp; OpenAQ v3 &nbsp;·&nbsp; OpenStreetMap / Nominatim &nbsp;·&nbsp;
+    AI: DeepSeek v3.1 via Ollama &nbsp;|&nbsp; Ros Group © 2026
+  </footer>
+</div>
+
+<script>
+  const queryInput    = document.getElementById('queryInput');
+  const submitBtn     = document.getElementById('submitBtn');
+  const loader        = document.getElementById('loader');
+  const loaderText    = document.getElementById('loaderText');
+  const resultWrap    = document.getElementById('resultWrap');
+  const resultContent = document.getElementById('resultContent');
+  // statsRow lives on the features page, not here
+
+
+  let _lastQuery     = '';
+  let _disambigOpts  = [];
+
+  queryInput.addEventListener('keydown', e => { if (e.key === 'Enter') submitQuery(); });
+  function fillQuery(el) { queryInput.value = el.textContent.replace(/^[^\w]+ ?/,''); queryInput.focus(); }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+  function esc(t) {
+    return String(t ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function condIcon(c) {
+    const s = (c||'').toLowerCase();
+    if (s.includes('thunder'))                                      return '⛈';
+    if (s.includes('snow'))                                         return '❄️';
+    if (s.includes('rain')||s.includes('drizzle')||s.includes('shower')) return '🌧';
+    if (s.includes('fog'))                                          return '🌫';
+    if (s.includes('overcast'))                                     return '☁️';
+    if (s.includes('cloud'))                                        return '⛅';
+    if (s.includes('clear')||s.includes('sunny'))                   return '☀️';
+    return '🌡';
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+    catch { return iso; }
+  }
+
+  function fmtVis(m) {
+    if (m == null) return '—';
+    return m >= 1000 ? (m/1000).toFixed(1)+' km' : m+' m';
+  }
+
+  // ─── AQI needle position (0-500 → 0-100%) ────────────────────────────────
+  function aqiPct(val) { return Math.min(100, Math.max(0, (val/500)*100)).toFixed(1); }
+
+  // ─── Build the weather metrics grid ──────────────────────────────────────
+  function weatherGrid(wd) {
+    const feelsC = wd.feels_like_celsius != null;
+    return `
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="mc-icon">🌡</div>
+        <div class="mc-label">Temperature</div>
+        <div class="mc-value">${wd.temperature_celsius}°C</div>
+        <div class="mc-sub">${wd.temperature_fahrenheit}°F</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-icon">🤔</div>
+        <div class="mc-label">Feels Like</div>
+        <div class="mc-value">${feelsC ? wd.feels_like_celsius+'°C' : '—'}</div>
+        <div class="mc-sub">${feelsC ? wd.feels_like_fahrenheit+'°F' : ''}</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-icon">💨</div>
+        <div class="mc-label">Wind Speed</div>
+        <div class="mc-value">${wd.wind_speed_kmh}</div>
+        <div class="mc-sub">km/h</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-icon">💧</div>
+        <div class="mc-label">Humidity</div>
+        <div class="mc-value">${wd.humidity_pct != null ? wd.humidity_pct+'%' : '—'}</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-icon">🔆</div>
+        <div class="mc-label">UV Index</div>
+        <div class="mc-value">${wd.uv_index != null ? wd.uv_index : '—'}</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-icon">👁</div>
+        <div class="mc-label">Visibility</div>
+        <div class="mc-value" style="font-size:1rem;">${fmtVis(wd.visibility_m)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-icon">🌅</div>
+        <div class="mc-label">Sunrise</div>
+        <div class="mc-value" style="font-size:1rem;">${fmtTime(wd.sunrise)}</div>
+      </div>
+      <div class="metric-card">
+        <div class="mc-icon">🌇</div>
+        <div class="mc-label">Sunset</div>
+        <div class="mc-value" style="font-size:1rem;">${fmtTime(wd.sunset)}</div>
+      </div>
+    </div>`;
+  }
+
+  // ─── Build the AQI section ────────────────────────────────────────────────
+  function aqiSection(aq) {
+    if (!aq) return '';
+    if (aq.error) return `<div class="aqi-no-data glass glass-sm mt2">🌬 ${esc(aq.error)}</div>`;
+
+    const aqi  = aq.aqi;
+    const poll = aq.pollutants || {};
+
+    const aqiBlock = aqi ? `
+      <div class="aqi-score">
+        <div class="aqi-circle" style="background:${esc(aqi.color)};">
+          ${aqi.value}
+        </div>
+        <div class="aqi-info">
+          <h3 style="color:${esc(aqi.color)};">${esc(aqi.category)}</h3>
+          <p>Air Quality Index</p>
+        </div>
+      </div>
+      <div class="aqi-bar-wrap mt1">
+        <div class="aqi-bar-labels"><span>Good</span><span>Moderate</span><span>Poor</span><span>Hazardous</span></div>
+        <div class="aqi-bar">
+          <div class="aqi-needle" style="left:${aqiPct(aqi.value)}%; color:${esc(aqi.color)};"></div>
+        </div>
+      </div>` : '';
+
+    const pollCards = Object.entries(poll).map(([key, p]) => `
+      <div class="poll-card">
+        <div class="poll-name">${esc(p.label)}</div>
+        <div class="poll-value">${p.value}</div>
+        <div class="poll-unit">${esc(p.unit)}</div>
+      </div>`).join('');
+
+    return `
+    <div class="glass aqi-section mt2">
+      <div class="section-label">🌿 Air Quality — ${esc(aq.station)}</div>
+      <div class="aqi-header-row">
+        ${aqiBlock}
+      </div>
+      ${pollCards ? `<div class="pollutants-grid">${pollCards}</div>` : ''}
+      <div class="data-src">Source: ${esc(aq.data_source)}</div>
+    </div>`;
+  }
+
+  // ─── AI Summary block ─────────────────────────────────────────────────────
+  function aiSummary(msg) {
+    if (!msg) return '';
+    return `
+    <div class="ai-summary mt2">
+      <div class="ai-label">🤖 AI Insight</div>
+      ${esc(msg)}
+    </div>`;
+  }
+
+  // ─── Full weather report ──────────────────────────────────────────────────
+  function fullReport(wd, msg) {
+    const icon = condIcon(wd.weather_condition);
+    return `
+    <div class="glass">
+      <div class="loc-row">
+        <div>
+          <div class="loc-name">📍 ${esc(wd.city)}</div>
+          <div class="loc-coords">${wd.latitude?.toFixed(3)}°, ${wd.longitude?.toFixed(3)}°</div>
+        </div>
+        <div class="cond-badge">${icon} ${esc(wd.weather_condition)}</div>
+      </div>
+      ${weatherGrid(wd)}
+      ${aiSummary(msg)}
+      <div class="data-src">Source: ${esc(wd.data_source)}</div>
+    </div>
+    ${aqiSection(wd.air_quality)}`;
+  }
+
+  // ─── Focused single-metric view ───────────────────────────────────────────
+  function focused(wd, value, label, msg) {
+    const icon = condIcon(wd.weather_condition);
+    return `
+    <div class="glass">
+      <div class="temp-hero">
+        <div class="temp-city">📍 ${esc(wd.city)}, ${esc(wd.country)}</div>
+        <div class="temp-big">${esc(value)}</div>
+        <div class="temp-label">${esc(label)}</div>
+        <button class="details-toggle" id="detailsToggleBtn" onclick="window.toggleDetails()">
+          See full details <span class="arrow">▼</span>
+        </button>
+      </div>
+
+      <div class="focused-details" id="focusedDetails">
+        <div class="focused-details-inner">
+          <div class="cond-badge" style="margin-bottom:0.75rem;">${icon} ${esc(wd.weather_condition)}</div>
+          ${weatherGrid(wd)}
+          ${aiSummary(msg)}
+          <div class="data-src">Source: ${esc(wd.data_source)}</div>
+        </div>
+      </div>
+    </div>
+    <div id="aqiSectionFocused" style="display:none;">${aqiSection(wd.air_quality)}</div>`;
+  }
+
+  window.toggleDetails = function() {
+    const panel  = document.getElementById('focusedDetails');
+    const btn    = document.getElementById('detailsToggleBtn');
+    const aqiFoc = document.getElementById('aqiSectionFocused');
+    if (!panel) return;
+    const open = panel.classList.toggle('open');
+    btn.querySelector('.arrow').style.transform = open ? 'rotate(180deg)' : '';
+    btn.childNodes[0].textContent = open ? 'Hide details ' : 'See full details ';
+    if (aqiFoc) aqiFoc.style.display = open ? 'block' : 'none';
+  };
+
+  // ─── Disambiguation panel ─────────────────────────────────────────────────
+  function renderDisambig(data) {
+    _disambigOpts = data.options || [];
+    const opts = _disambigOpts.map((o, i) => `
+      <button class="disambig-opt" onclick="window._pickDisambig(${i})">
+        <span>📍</span>
+        <span>${esc(o.label)}</span>
+        <span class="coords-sm">${o.lat.toFixed(3)}°, ${o.lon.toFixed(3)}°</span>
+      </button>`).join('');
+    return `
+    <div class="glass">
+      <div class="disambig-hdr">⚠️ ${esc(data.message)}</div>
+      <div class="disambig-list">${opts}</div>
+    </div>`;
+  }
+
+  window._pickDisambig = function(i) {
+    const opt = _disambigOpts[i];
+    if (!opt) return;
+    pickLocation(opt.lat, opt.lon, opt.label);
+  };
+
+  // ─── Main render ──────────────────────────────────────────────────────────
+  function renderResult(data) {
+    const intent = data.intent || 'full';
+    const wd     = data.weather_data;
+    const msg    = data.message || '';
+
+    if (data.status === 'error')          return `<div class="alert alert-error">❌ ${esc(msg)}</div>`;
+    if (data.status === 'clarification')  return `<div class="alert alert-info">💬 ${esc(msg)}</div>`;
+    if (data.status === 'disambiguation') return renderDisambig(data);
+    if (!wd)                              return `<div class="alert alert-error">❌ No data returned. Please try again.</div>`;
+
+    if (intent === 'fahrenheit')  return focused(wd, `${wd.temperature_fahrenheit}°F`, 'Temperature in Fahrenheit', msg);
+    if (intent === 'celsius')     return focused(wd, `${wd.temperature_celsius}°C`,    'Temperature in Celsius',    msg);
+    if (intent === 'wind')        return focused(wd, `${wd.wind_speed_kmh} km/h`,      'Wind Speed',                msg);
+    if (intent === 'feels_like') {
+      const val = wd.feels_like_celsius != null
+        ? `${wd.feels_like_celsius}°C / ${wd.feels_like_fahrenheit}°F` : 'N/A';
+      return focused(wd, val, 'Feels Like', msg);
+    }
+    if (intent === 'condition') {
+      return focused(wd, `${condIcon(wd.weather_condition)} ${wd.weather_condition}`, 'Current Conditions', msg);
+    }
+    if (intent === 'air_quality') {
+      // Show AQ first, then weather details toggle
+      const aq = wd.air_quality;
+      const aqiVal = aq && aq.aqi ? aq.aqi.value : '—';
+      return focused(wd, `AQI ${aqiVal}`, 'Air Quality Index', msg);
+    }
+
+    return fullReport(wd, msg);
+  }
+
+  // ─── Submit query ─────────────────────────────────────────────────────────
+  async function submitQuery() {
+    const query = queryInput.value.trim();
+    if (!query) return;
+    _lastQuery = query;
+
+    resultWrap.classList.remove('visible');
+    resultContent.innerHTML = '';
+
+
+    submitBtn.disabled = true;
+    loader.classList.add('visible');
+    loaderText.textContent = 'Reasoning & fetching real-time data…';
+
+    try {
+      const res  = await fetch('/query', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({query})
+      });
+      const data = await res.json();
+      loader.classList.remove('visible');
+      resultContent.innerHTML = renderResult(data);
+      resultWrap.classList.add('visible');
+    } catch(err) {
+      loader.classList.remove('visible');
+      resultContent.innerHTML = `<div class="alert alert-error">❌ Network error: ${esc(err.message)}</div>`;
+      resultWrap.classList.add('visible');
+    } finally {
+      submitBtn.disabled = false;
+    }
+  }
+
+  // ─── Pick location after disambiguation ───────────────────────────────────
+  async function pickLocation(lat, lon, label) {
+    resultWrap.classList.remove('visible');
+    resultContent.innerHTML = '';
+    loader.classList.add('visible');
+    loaderText.textContent = `Fetching data for ${label}…`;
+    submitBtn.disabled = true;
+
+    try {
+      const res  = await fetch('/weather_by_coords', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({lat, lon, label, original_query: _lastQuery})
+      });
+      const data = await res.json();
+      loader.classList.remove('visible');
+      resultContent.innerHTML = renderResult(data);
+      resultWrap.classList.add('visible');
+    } catch(err) {
+      loader.classList.remove('visible');
+      resultContent.innerHTML = `<div class="alert alert-error">❌ ${esc(err.message)}</div>`;
+      resultWrap.classList.add('visible');
+    } finally {
+      submitBtn.disabled = false;
+    }
+  }
+</script>
+</body>
+</html>
